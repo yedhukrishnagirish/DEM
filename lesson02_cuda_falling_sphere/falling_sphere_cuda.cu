@@ -71,14 +71,18 @@ __global__ void step_kernel(Sphere* spheres,
     apply_floor_contact(sphere, contact);
     integrate_symplectic_euler(sphere, dt);
 }
+
 int main() {
-    constexpr int sphere_count = 1;
+    constexpr int sphere_count = 10;
 
     Sphere host_spheres[sphere_count];
-    host_spheres[0].position = {0.0, 1.0, 0.0};
-    host_spheres[0].velocity = {0.0, 0.0, 0.0};
-    host_spheres[0].radius = 0.1;
-    host_spheres[0].mass = 1.0;
+
+    for (int i = 0; i < sphere_count; ++i) {
+        host_spheres[i].position = {-0.9 + 0.2 * i, 1.0 + 0.08 * i, 0.0};
+        host_spheres[i].velocity = {0.0, 0.0, 0.0};
+        host_spheres[i].radius = 0.08;
+        host_spheres[i].mass = 1.0;
+    }
 
     Sphere* device_spheres = nullptr;
 
@@ -105,7 +109,7 @@ int main() {
     const int steps = static_cast<int>(end_time / dt);
 
     std::ofstream csv("falling_sphere_cuda.csv");
-    csv << "time,y,vy,force_y\n";
+    csv << "time,id,x,y,vx,vy,force_y\n";
 
     const int threads_per_block = 128;
     const int blocks =
@@ -124,12 +128,18 @@ int main() {
             );
 
             const double time = step * dt;
-            const Sphere& sphere = host_spheres[0];
 
-            csv << time << ","
-                << sphere.position.y << ","
-                << sphere.velocity.y << ","
-                << sphere.force.y << "\n";
+            for (int i = 0; i < sphere_count; ++i) {
+                const Sphere& sphere = host_spheres[i];
+
+                csv << time << ","
+                    << i << ","
+                    << sphere.position.x << ","
+                    << sphere.position.y << ","
+                    << sphere.velocity.x << ","
+                    << sphere.velocity.y << ","
+                    << sphere.force.y << "\n";
+            }
         }
 
         step_kernel<<<blocks, threads_per_block>>>(
@@ -155,8 +165,9 @@ int main() {
         "final copy GPU to CPU failed"
     );
 
-    std::cout << "Final y: " << host_spheres[0].position.y << "\n";
-    std::cout << "Final vy: " << host_spheres[0].velocity.y << "\n";
+    std::cout << "Final sphere 0 y: " << host_spheres[0].position.y << "\n";
+    std::cout << "Final sphere 0 vy: " << host_spheres[0].velocity.y << "\n";
+    std::cout << "Simulated spheres: " << sphere_count << "\n";
     std::cout << "Wrote falling_sphere_cuda.csv\n";
 
     cudaFree(device_spheres);

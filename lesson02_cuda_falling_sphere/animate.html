@@ -33,131 +33,131 @@
   <p id="info">Load falling_sphere.csv</p>
 
   <canvas id="canvas" width="700" height="700"></canvas>
-
+  
   <script>
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
-    const info = document.getElementById("info");
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+  const info = document.getElementById("info");
 
-    let data = [];
-    let frame = 0;
-    let playing = false;
+  let frames = [];
+  let frame = 0;
+  let playing = false;
 
-    const floorY = 620;
-    const sphereRadiusPx = 35;
+  const floorY = 620;
+  const pixelsPerMeter = 280;
+  const sphereRadiusPx = 18;
+  const frameDelayMs = 40;
 
-    function drawScene() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+  function drawScene() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Floor
-      ctx.strokeStyle = "#222";
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.moveTo(80, floorY);
-      ctx.lineTo(620, floorY);
-      ctx.stroke();
+    ctx.strokeStyle = "#222";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(60, floorY);
+    ctx.lineTo(640, floorY);
+    ctx.stroke();
 
-      // Wall / scale line
-      ctx.strokeStyle = "#aaa";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(80, 80);
-      ctx.lineTo(80, floorY);
-      ctx.stroke();
+    if (frames.length === 0) {
+      ctx.fillStyle = "#555";
+      ctx.fillText("Choose falling_sphere_cuda.csv", 250, 330);
+      return;
+    }
 
-      if (data.length === 0) {
-        ctx.fillStyle = "#555";
-        ctx.fillText("Choose falling_sphere.csv", 260, 330);
-        return;
-      }
+    const particles = frames[frame];
 
-      const d = data[frame];
+    for (const p of particles) {
+      const screenX = 350 + p.x * pixelsPerMeter;
+      const screenY = floorY - p.y * pixelsPerMeter;
 
-      // Our C++ floor is at y = 0, sphere starts around y = 1.
-      // Convert simulation y to screen y.
-      const yWorld = d.y;
-      const screenX = 350;
-      const screenY = floorY - yWorld * 500;
-
-      // Trail
-      ctx.strokeStyle = "rgba(0, 90, 200, 0.25)";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-
-      for (let i = 0; i <= frame; i += 2) {
-        const x = 350;
-        const y = floorY - data[i].y * 500;
-
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-
-      ctx.stroke();
-
-      // Sphere
       ctx.fillStyle = "#2f80ed";
       ctx.beginPath();
       ctx.arc(screenX, screenY, sphereRadiusPx, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.strokeStyle = "#0f3f8c";
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 2;
       ctx.stroke();
 
-      // Text
-      info.textContent =
-        "time = " + d.time.toFixed(3) +
-        " s | y = " + d.y.toFixed(4) +
-        " m | vy = " + d.vy.toFixed(4) +
-        " m/s | force_y = " + d.force_y.toFixed(2) + " N";
+      ctx.fillStyle = "white";
+      ctx.font = "11px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText(p.id, screenX, screenY + 4);
     }
 
-    function animate() {
-      if (!playing) return;
+    info.textContent =
+      "time = " + particles[0].time.toFixed(3) +
+      " s | particles = " + particles.length +
+      " | frame = " + frame + " / " + (frames.length - 1);
+  }
 
-      frame++;
+  function animate() {
+    if (!playing) return;
 
-      if (frame >= data.length) {
-        frame = data.length - 1;
-        playing = false;
-        return;
-      }
+    frame++;
 
+    if (frame >= frames.length) {
+      frame = frames.length - 1;
+      playing = false;
       drawScene();
-      requestAnimationFrame(animate);
+      return;
     }
-
-    document.getElementById("csvFile").addEventListener("change", async function () {
-      const text = await this.files[0].text();
-      const lines = text.trim().split(/\r?\n/).slice(1);
-
-      data = lines.map(line => {
-        const [time, y, vy, force_y] = line.split(",").map(Number);
-        return { time, y, vy, force_y };
-      });
-
-      frame = 0;
-      playing = false;
-      drawScene();
-    });
-
-    document.getElementById("playBtn").onclick = function () {
-      if (data.length === 0) return;
-      playing = true;
-      requestAnimationFrame(animate);
-    };
-
-    document.getElementById("pauseBtn").onclick = function () {
-      playing = false;
-    };
-
-    document.getElementById("resetBtn").onclick = function () {
-      frame = 0;
-      playing = false;
-      drawScene();
-    };
 
     drawScene();
-  </script>
+
+    setTimeout(() => {
+      requestAnimationFrame(animate);
+    }, frameDelayMs);
+  }
+
+  document.getElementById("csvFile").addEventListener("change", async function () {
+    const text = await this.files[0].text();
+    const lines = text.trim().split(/\r?\n/).slice(1);
+
+    const rows = lines.map(line => {
+      const [time, id, x, y, vx, vy, force_y] = line.split(",").map(Number);
+      return { time, id, x, y, vx, vy, force_y };
+    });
+
+    const frameMap = new Map();
+
+    for (const row of rows) {
+      const key = row.time.toFixed(5);
+
+      if (!frameMap.has(key)) {
+        frameMap.set(key, []);
+      }
+
+      frameMap.get(key).push(row);
+    }
+
+    frames = Array.from(frameMap.values());
+
+    frame = 0;
+    playing = false;
+    drawScene();
+  });
+
+  document.getElementById("playBtn").onclick = function () {
+    if (frames.length === 0) return;
+    if (playing) return;
+
+    playing = true;
+    requestAnimationFrame(animate);
+  };
+
+  document.getElementById("pauseBtn").onclick = function () {
+    playing = false;
+  };
+
+  document.getElementById("resetBtn").onclick = function () {
+    frame = 0;
+    playing = false;
+    drawScene();
+  };
+
+  drawScene();
+</script>
+  
 </body>
 </html>
