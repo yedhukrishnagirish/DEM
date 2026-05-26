@@ -1,0 +1,163 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>DEM Falling Sphere Animation</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 24px;
+      background: #f5f5f5;
+    }
+
+    canvas {
+      background: white;
+      border: 1px solid #bbb;
+      display: block;
+      margin-top: 16px;
+    }
+
+    button, input {
+      margin-right: 8px;
+    }
+  </style>
+</head>
+<body>
+  <h2>DEM Falling Sphere Animation</h2>
+
+  <input type="file" id="csvFile" accept=".csv">
+  <button id="playBtn">Play</button>
+  <button id="pauseBtn">Pause</button>
+  <button id="resetBtn">Reset</button>
+
+  <p id="info">Load falling_sphere.csv</p>
+
+  <canvas id="canvas" width="700" height="700"></canvas>
+
+  <script>
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const info = document.getElementById("info");
+
+    let data = [];
+    let frame = 0;
+    let playing = false;
+
+    const floorY = 620;
+    const sphereRadiusPx = 35;
+
+    function drawScene() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Floor
+      ctx.strokeStyle = "#222";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(80, floorY);
+      ctx.lineTo(620, floorY);
+      ctx.stroke();
+
+      // Wall / scale line
+      ctx.strokeStyle = "#aaa";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(80, 80);
+      ctx.lineTo(80, floorY);
+      ctx.stroke();
+
+      if (data.length === 0) {
+        ctx.fillStyle = "#555";
+        ctx.fillText("Choose falling_sphere.csv", 260, 330);
+        return;
+      }
+
+      const d = data[frame];
+
+      // Our C++ floor is at y = 0, sphere starts around y = 1.
+      // Convert simulation y to screen y.
+      const yWorld = d.y;
+      const screenX = 350;
+      const screenY = floorY - yWorld * 500;
+
+      // Trail
+      ctx.strokeStyle = "rgba(0, 90, 200, 0.25)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+
+      for (let i = 0; i <= frame; i += 2) {
+        const x = 350;
+        const y = floorY - data[i].y * 500;
+
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+
+      ctx.stroke();
+
+      // Sphere
+      ctx.fillStyle = "#2f80ed";
+      ctx.beginPath();
+      ctx.arc(screenX, screenY, sphereRadiusPx, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "#0f3f8c";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      // Text
+      info.textContent =
+        "time = " + d.time.toFixed(3) +
+        " s | y = " + d.y.toFixed(4) +
+        " m | vy = " + d.vy.toFixed(4) +
+        " m/s | force_y = " + d.force_y.toFixed(2) + " N";
+    }
+
+    function animate() {
+      if (!playing) return;
+
+      frame++;
+
+      if (frame >= data.length) {
+        frame = data.length - 1;
+        playing = false;
+        return;
+      }
+
+      drawScene();
+      requestAnimationFrame(animate);
+    }
+
+    document.getElementById("csvFile").addEventListener("change", async function () {
+      const text = await this.files[0].text();
+      const lines = text.trim().split(/\r?\n/).slice(1);
+
+      data = lines.map(line => {
+        const [time, y, vy, force_y] = line.split(",").map(Number);
+        return { time, y, vy, force_y };
+      });
+
+      frame = 0;
+      playing = false;
+      drawScene();
+    });
+
+    document.getElementById("playBtn").onclick = function () {
+      if (data.length === 0) return;
+      playing = true;
+      requestAnimationFrame(animate);
+    };
+
+    document.getElementById("pauseBtn").onclick = function () {
+      playing = false;
+    };
+
+    document.getElementById("resetBtn").onclick = function () {
+      frame = 0;
+      playing = false;
+      drawScene();
+    };
+
+    drawScene();
+  </script>
+</body>
+</html>

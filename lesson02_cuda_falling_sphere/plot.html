@@ -1,0 +1,72 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Falling Sphere Plot</title>
+  <style>
+    body { font-family: Arial; margin: 30px; }
+    canvas { border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <h2>Falling Sphere: height vs time</h2>
+  <input type="file" id="file" accept=".csv">
+  <br><br>
+  <canvas id="plot" width="900" height="500"></canvas>
+
+  <script>
+    document.getElementById("file").addEventListener("change", async function () {
+      const text = await this.files[0].text();
+      const lines = text.trim().split("\n").slice(1);
+
+      const data = lines.map(line => {
+        const [time, y, vy, force_y] = line.split(",").map(Number);
+        return { time, y, vy, force_y };
+      });
+
+      const canvas = document.getElementById("plot");
+      const ctx = canvas.getContext("2d");
+
+      const W = canvas.width;
+      const H = canvas.height;
+      const pad = 60;
+
+      const tMin = Math.min(...data.map(d => d.time));
+      const tMax = Math.max(...data.map(d => d.time));
+      const yMin = Math.min(...data.map(d => d.y));
+      const yMax = Math.max(...data.map(d => d.y));
+
+      function xScale(t) {
+        return pad + (t - tMin) / (tMax - tMin) * (W - 2 * pad);
+      }
+
+      function yScale(y) {
+        return H - pad - (y - yMin) / (yMax - yMin) * (H - 2 * pad);
+      }
+
+      ctx.clearRect(0, 0, W, H);
+
+      ctx.beginPath();
+      ctx.moveTo(pad, pad);
+      ctx.lineTo(pad, H - pad);
+      ctx.lineTo(W - pad, H - pad);
+      ctx.stroke();
+
+      ctx.fillText("time", W / 2, H - 20);
+      ctx.fillText("height y", 10, H / 2);
+
+      ctx.beginPath();
+      data.forEach((d, i) => {
+        const x = xScale(d.time);
+        const y = yScale(d.y);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+
+      ctx.strokeStyle = "blue";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    });
+  </script>
+</body>
+</html>
